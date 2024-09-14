@@ -1,0 +1,46 @@
+[
+    {
+        "source": "Soil Moisture Sensor",
+        "data": [
+            {
+                "level": 45,
+                "units": "%"
+            },
+            {
+                "soil_temperature": 18,
+                "units": "C"
+            }
+        ]
+    },
+    {
+        "source": "PH Sensor",
+        "data": [
+            {
+                "level": 6.8,
+                "units": "PH"
+            }
+        ]
+    },
+    {
+        "source": "Light Sensor",
+        "data": [
+            {
+                "light_intensity": 800,
+                "units": "lux"
+            },
+            {
+                "ambient_temperature": 24,
+                "units": "C"
+            }
+        ]
+    },
+    {
+        "source": "Humidity Sensor",
+        "data": [
+            {
+                "level": 65,
+                "units": "%"
+            }
+        ]
+    }
+]
