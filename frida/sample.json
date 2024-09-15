@@ -1,9 +1,13 @@
 [
     {
+        "crop": "tomato",
+        "sprinklers": 3
+    },
+    {
         "source": "Soil Moisture Sensor",
         "data": [
             {
-                "level": 45,
+                "level": 15,
                 "units": "%"
             },
             {
@@ -38,7 +42,7 @@
         "source": "Humidity Sensor",
         "data": [
             {
-                "level": 65,
+                "level": 24,
                 "units": "%"
             }
         ]
