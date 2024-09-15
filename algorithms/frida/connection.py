@@ -9,8 +9,6 @@ client = OpenAI(
     base_url="http://198.145.126.109:8080/v1"
 )
 
-#format = [{"source": "<name of source>","data": [{"level": "<enter level>","units": "<enter unit>"},{"level": "<enter level>","units": "<enter unit>"}]},{"source": "<name of source>","data": [{"level": "<enter level>","units": "<enter unit>"}]}]
-
 @app.route('/crops', methods=['GET'])
 def get_crops_recommendation():
     system_message = "You are an agricultural assistant that, based off of sensor data provided, will give the user a recommendation based off the sensor data provided"
