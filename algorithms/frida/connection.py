@@ -27,7 +27,7 @@ def get_crops_recommendation():
     )
     return response.choices[0].message.content
 
-@app.route('/crops', methods=['GET'])
+@app.route('/management', methods=['GET'])
 def get_management_recommendation():
     system_message = "You are a storage assistant that, based off of visual data received, will give the company a recomendation on how to manage the storage of the crops. If the crops are in a good state, you will recommend to keep them in storage. If the crops are in the process of spoiling, you will recommend to sell them. If the crops are already spoiled, you will recommend to dispose of them."
     data = request.get_json()  
