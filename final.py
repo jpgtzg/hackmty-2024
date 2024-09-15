@@ -1,38 +1,61 @@
-import json
 from pathlib import Path
 from PIL import Image
 from ultralytics import YOLO
 import openvino as ov
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from io import BytesIO
 import base64
 import requests
+import json
 
+# Initialize Flask app
 app = Flask(__name__)
-CORS(app, resources={r"/upload": {"origins": ["10.22.130.241:8081", "10.22.130.241:5001"]}})
+CORS(app, resources={r"/upload": {"origins": ["http://10.22.130.241:8081", "http://10.22.130.241:5001"]}})
 
-# Descarga de herramientas de OpenVINO
-r = requests.get(
-    url="https://raw.githubusercontent.com/openvinotoolkit/openvino_notebooks/latest/utils/notebook_utils.py",
-)
+# Download OpenVINO utilities to local environment
+r = requests.get("https://raw.githubusercontent.com/openvinotoolkit/openvino_notebooks/latest/utils/notebook_utils.py")
 open("notebook_utils.py", "w").write(r.text)
-from notebook_utils import download_file, device_widget, quantization_widget
+from notebook_utils import device_widget
 
-# Procesar la imagen y aplicar detección
+# Ensure necessary directories exist
+Path("models").mkdir(exist_ok=True)
+Path("json").mkdir(exist_ok=True)
+Path("images").mkdir(exist_ok=True)
+
+# Serve static files
+@app.route('/json/<path:filename>', methods=['GET'])
+def serve_json(filename):
+    filepath = Path(f"json/{filename}")
+    if filepath.exists():
+        print(f"Serving JSON file: {filename}")  # Debug info
+        return send_from_directory('json', filename)
+    else:
+        print(f"File not found: {filename}")  # Debug info
+        return jsonify({'error': 'File not found'}), 404
+
+@app.route('/images/<path:filename>', methods=['GET'])
+def serve_images(filename):
+    filepath = Path(f"images/{filename}")
+    if filepath.exists():
+        print(f"Serving image: {filename}")  # Debug info
+        return send_from_directory('images', filename)
+    else:
+        print(f"Image not found: {filename}")  # Debug info
+        return jsonify({'error': 'Image not found'}), 404
+
+# Process image and apply detection
 def process_image(filepath):
     IMAGE_PATH = Path(filepath)
-    models_dir = Path("models")
-    models_dir.mkdir(exist_ok=True)
     det_model = YOLO("models/best.pt")
     label_map = det_model.model.names
 
-    # Inicializar OpenVINO Core
+    # Initialize OpenVINO Core
     core = ov.Core()
     det_ov_model = core.read_model("models/best.xml")
     device = device_widget('CPU')
 
-    # Compilar el modelo en OpenVINO
+    # Compile the model in OpenVINO
     ov_config = {}
     if device.value != "CPU":
         det_ov_model.reshape({0: [1, 3, 640, 640]})
@@ -40,10 +63,10 @@ def process_image(filepath):
         ov_config = {"GPU_DISABLE_WINOGRAD_CONVOLUTION": "YES"}
     det_compiled_model = core.compile_model(det_ov_model, device.value, ov_config)
 
-    # Inferencia con YOLO y OpenVINO
+    # Inference with YOLO and OpenVINO
     res = det_model(IMAGE_PATH)
 
-    # Procesar resultados y generar archivo JSON
+    # Process results and generate JSON file
     detections = []
     for detection in res[0].boxes:
         box = detection.xyxy.tolist()[0]
@@ -57,16 +80,18 @@ def process_image(filepath):
             "box": box
         })
 
-    # Guardar detecciones en JSON
+    # Save detections in JSON
     output_path = Path("json/detections.json")
+    print(f"Saving detections to: {output_path}")  # Debug info
     with open(output_path, "w") as f:
         json.dump(detections, f, indent=4)
 
-    # Guardar la imagen con detecciones
+    # Save the image with detections
     output_image_path = Path("images/detections.jpg")
+    print(f"Saving image to: {output_image_path}")  # Debug info
     res[0].save(output_image_path)
 
-    # Convertir la imagen a base64 para enviarla
+    # Convert the image to base64 to send it
     buffered = BytesIO()
     img = Image.open(output_image_path)
     img.save(buffered, format="JPEG")
@@ -83,18 +108,27 @@ def upload_file():
     if file.filename == '':
         return jsonify({'error': 'No se ha seleccionado ningún archivo'}), 400
 
-    # Guardar el archivo temporalmente
     filepath = Path("uploaded_image.jpg")
     file.save(filepath)
 
     try:
-        # Procesar la imagen
         processed_image_base64, detections = process_image(filepath)
 
-        # Retornar la imagen procesada en formato base64 y el JSON con las detecciones
+        # Save paths to return to the front-end
+        detections_path = "json/detections.json"
+        image_path = "images/detections.jpg"
+
+        # Verifica la existencia de los archivos antes de responder
+        if not Path(detections_path).exists():
+            print(f"JSON file not found: {detections_path}")
+        if not Path(image_path).exists():
+            print(f"Image file not found: {image_path}")
+
         return jsonify({
             'processed_image': processed_image_base64,
-            'detections': detections
+            'detections': detections,
+            'detections_path': detections_path,
+            'image_path': image_path
         })
     except Exception as e:
         print(f"Error al procesar la imagen: {e}")
