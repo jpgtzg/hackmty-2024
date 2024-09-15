@@ -10,7 +10,7 @@ import base64
 import requests
 
 app = Flask(__name__)
-CORS(app, resources={r"/upload": {"origins": ["10.22.139.44:8081", "http://10.22.139.44:5000"]}})
+CORS(app, resources={r"/upload": {"origins": ["10.22.130.241:8081", "10.22.130.241:5001"]}})
 
 # Descarga de herramientas de OpenVINO
 r = requests.get(
@@ -101,4 +101,4 @@ def upload_file():
         return jsonify({'error': 'Error al procesar la imagen'}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5001)
