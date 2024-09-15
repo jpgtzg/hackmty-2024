@@ -2,89 +2,103 @@ import json
 from pathlib import Path
 from PIL import Image
 from ultralytics import YOLO
-import cv2 as cv
-import torch
 import openvino as ov
-
-# Fetch `notebook_utils` module
-# Estas son tools hechas por OpenVINO para facilitar el uso de sus modelos, esto genera un archivo llamado `notebook_utils.py`
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from io import BytesIO
+import base64
 import requests
 
+app = Flask(__name__)
+CORS(app, resources={r"/upload": {"origins": ["10.22.139.44:8081", "http://10.22.139.44:5000"]}})
+
+# Descarga de herramientas de OpenVINO
 r = requests.get(
     url="https://raw.githubusercontent.com/openvinotoolkit/openvino_notebooks/latest/utils/notebook_utils.py",
 )
-
 open("notebook_utils.py", "w").write(r.text)
+from notebook_utils import download_file, device_widget, quantization_widget
 
+# Procesar la imagen y aplicar detección
+def process_image(filepath):
+    IMAGE_PATH = Path(filepath)
+    models_dir = Path("models")
+    models_dir.mkdir(exist_ok=True)
+    det_model = YOLO("models/best.pt")
+    label_map = det_model.model.names
 
-# Importar las herramientas necesarias de OpenVINO
-from notebook_utils import download_file, VideoPlayer, device_widget, quantization_widget
+    # Inicializar OpenVINO Core
+    core = ov.Core()
+    det_ov_model = core.read_model("models/best.xml")
+    device = device_widget('CPU')
 
+    # Compilar el modelo en OpenVINO
+    ov_config = {}
+    if device.value != "CPU":
+        det_ov_model.reshape({0: [1, 3, 640, 640]})
+    if "GPU" in device.value or ("AUTO" in device.value and "GPU" in core.available_devices):
+        ov_config = {"GPU_DISABLE_WINOGRAD_CONVOLUTION": "YES"}
+    det_compiled_model = core.compile_model(det_ov_model, device.value, ov_config)
 
-# Modelos de PyTorch (esto sirve para hacer la comparativa con OpenVINO)
-IMAGE_PATH = Path("images/hoja.jpg")
-models_dir = Path("models")
-models_dir.mkdir(exist_ok=True)
-det_model = YOLO("models/best.pt")
-label_map = det_model.model.names
+    # Inferencia con YOLO y OpenVINO
+    res = det_model(IMAGE_PATH)
 
-# Seleccionamos el CPU como dispositivo para hacer la inferencia
-device = device_widget('CPU')
+    # Procesar resultados y generar archivo JSON
+    detections = []
+    for detection in res[0].boxes:
+        box = detection.xyxy.tolist()[0]
+        score = detection.conf.tolist()[0]
+        class_id = detection.cls.tolist()[0]
+        label = label_map[int(class_id)]
 
-# Inicializamos un OpenVINO Core
-core = ov.Core()
+        detections.append({
+            "class": label,
+            "confidence": score,
+            "box": box
+        })
 
-# Modelo de OpenVINO (este fue primero convertido de PyTorch a ONNX y luego a OpenVINO)
-det_ov_model = core.read_model("models/best.xml")
+    # Guardar detecciones en JSON
+    output_path = Path("json/detections.json")
+    with open(output_path, "w") as f:
+        json.dump(detections, f, indent=4)
 
-# Detectamos objetos en la imagen con OpenVINO
-ov_config = {}
-if device.value != "CPU":
-    det_ov_model.reshape({0: [1, 3, 640, 640]})
-if "GPU" in device.value or ("AUTO" in device.value and "GPU" in core.available_devices):
-    ov_config = {"GPU_DISABLE_WINOGRAD_CONVOLUTION": "YES"}
-det_compiled_model = core.compile_model(det_ov_model, device.value, ov_config)
+    # Guardar la imagen con detecciones
+    output_image_path = Path("images/detections.jpg")
+    res[0].save(output_image_path)
 
-# Definimos una función para hacer inferencias con OpenVINO
-def infer(*args):
-    result = det_compiled_model(args)
-    return torch.from_numpy(result[0])
+    # Convertir la imagen a base64 para enviarla
+    buffered = BytesIO()
+    img = Image.open(output_image_path)
+    img.save(buffered, format="JPEG")
+    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
+    return img_str, detections
 
-# Hacer la inferencia con el modelo YOLO
-res = det_model(IMAGE_PATH)
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'photo' not in request.files:
+        return jsonify({'error': 'No se ha enviado ningún archivo'}), 400
 
-# Procesar los resultados para guardarlos en un archivo JSON
-detections = []
-for detection in res[0].boxes:  # Recorremos las detecciones
-    box = detection.xyxy.tolist()[0]  # Coordenadas de la caja delimitadora (x1, y1, x2, y2)
-    score = detection.conf.tolist()[0]  # Confianza de la predicción (accedemos al primer valor)
-    class_id = detection.cls.tolist()[0]  # ID de la clase (accedemos al primer valor)
-    label = label_map[int(class_id)]  # Nombre de la clase a partir del mapa de etiquetas
+    file = request.files['photo']
+    if file.filename == '':
+        return jsonify({'error': 'No se ha seleccionado ningún archivo'}), 400
 
-    detections.append({
-        "class": label,
-        "confidence": score,
-        "box": box
-    })
+    # Guardar el archivo temporalmente
+    filepath = Path("uploaded_image.jpg")
+    file.save(filepath)
 
-# Guardar las detecciones en un archivo JSON
-output_path = Path("json/detections.json")
-with open(output_path, "w") as f:
-    json.dump(detections, f, indent=4)
+    try:
+        # Procesar la imagen
+        processed_image_base64, detections = process_image(filepath)
 
-print(f"Detecciones guardadas en {output_path}")
+        # Retornar la imagen procesada en formato base64 y el JSON con las detecciones
+        return jsonify({
+            'processed_image': processed_image_base64,
+            'detections': detections
+        })
+    except Exception as e:
+        print(f"Error al procesar la imagen: {e}")
+        return jsonify({'error': 'Error al procesar la imagen'}), 500
 
-# Mostrar la imagen con las detecciones
-Image.fromarray(res[0].plot()[:, :, ::-1])
-
-# Añadir código OpenCV para ver la imagen en una ventana
-cv.imshow("Image", res[0].plot()[:, :, ::-1])
-cv.waitKey(0)
-cv.destroyAllWindows()
-
-# Guardar la imagen con las detecciones
-output_image_path = Path("images/detections.jpg")
-res[0].save(output_image_path)
-print(f"Imagen con detecciones guardada en {output_image_path}")
-
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
