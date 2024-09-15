@@ -1,3 +1,5 @@
+models
+/__pycache__
 /.venv/
 .vercel
 .DS_Store
