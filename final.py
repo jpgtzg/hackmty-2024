@@ -18,7 +18,7 @@ open("notebook_utils.py", "w").write(r.text)
 
 
 # Importar las herramientas necesarias de OpenVINO
-from algorithms.vision.notebook_utils import download_file, VideoPlayer, device_widget, quantization_widget
+from notebook_utils import download_file, VideoPlayer, device_widget, quantization_widget
 
 
 # Modelos de PyTorch (esto sirve para hacer la comparativa con OpenVINO)
