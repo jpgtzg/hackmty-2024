@@ -1,6 +1,6 @@
 # AgriSense 🌱
 
-A tool with AI for plant detection and care could leverage technologies such as computer vision and machine learning to identify and monitor plant health.
+A tool with AI for plant detection and care with leverage technologies such as computer vision and AI to identify and monitor plant health.
 
 ![Copy of AgriSense](https://github.com/user-attachments/assets/25abb697-e59e-4d5b-8a42-028e84674290)
 
