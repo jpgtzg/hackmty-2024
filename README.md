@@ -27,5 +27,8 @@ Our app not only manages farm operations and plant health using AI, but it also 
 - OpenAI API
 - AWS API Gateway
 - Flask
-- OpenVINO
+- OpenVINO & OpenCV
 - OpenCV
+
+### [Front-end](https://github.com/rpribau/hackmty-2024-app)
+- React Native
